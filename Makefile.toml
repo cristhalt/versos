@@ -1,0 +1,57 @@
+[config]
+default_to_workspace = false
+
+[env.x86_64]
+RUST_TARGET = "x86_64-unknown-uefi"
+UEFI_BOOT_FILE = "BOOTX64.EFI"
+QEMU = "qemu-system-x86_64"
+FIRMWARE_CODE = { value = "/usr/share/ovmf/x64/OVMF_CODE.4m.fd", condition = { env_not_set = [
+    "FIRMWARE_CODE",
+] } }
+FIRMWARE_VARS = { value = "/usr/share/ovmf/x64/OVMF_VARS.4m.fd", condition = { env_not_set = [
+    "FIRMWARE_VARS",
+] } }
+
+[env.aarch64]
+RUST_TARGET = "aarch64-unknown-uefi"
+BUILD_DIR = "target/${RUST_TARGET}/release"
+UEFI_BOOT_FILE = "BOOTAA64.EFI"
+QEMU = "qemu-system-aarch64"
+FIRMWARE_CODE = { value = "/usr/share/ovmf/aarch64/QEMU_CODE.fd", condition = { env_not_set = [
+    "FIRMWARE_CODE",
+] } }
+FIRMWARE_VARS = { value = "/usr/share/ovmf/aarch64/QEMU_VARS.fd", condition = { env_not_set = [
+    "FIRMWARE_VARS",
+] } }
+
+[env]
+BUILD_DIR = "target/${RUST_TARGET}/release"
+UEFI_DIR = "${BUILD_DIR}/esp"
+
+[tasks.build]
+command = "cargo"
+args = [
+    "build",
+    "--release",
+    "--package",
+    "versos-kernel",
+    "--target",
+    "${RUST_TARGET}",
+]
+
+[tasks.run]
+dependencies = ["build"]
+script = '''
+mkdir -p ${UEFI_DIR}/EFI/BOOT/
+cp ${BUILD_DIR}/versos-kernel.efi ${UEFI_DIR}/EFI/BOOT/${UEFI_BOOT_FILE}
+
+
+${QEMU} -enable-kvm \
+        -drive if=pflash,format=raw,readonly=on,file=${FIRMWARE_CODE} \
+        -drive if=pflash,format=raw,readonly=on,file=${FIRMWARE_VARS} \
+        -drive format=raw,file=fat:rw:${UEFI_DIR}
+'''
+
+[tasks.clean]
+command = "cargo"
+args = ["clean"]
